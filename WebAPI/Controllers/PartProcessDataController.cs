@@ -19,14 +19,14 @@ namespace WebAPI.Controllers
         }
 
         [HttpGet(Name = "GetPartsProcessData")]
-        public async Task<ActionResult<List<PartAllProcessDataDTO>>> GetPartsProcessData([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10, [FromQuery] DateTime? startedFrom = null, [FromQuery] DateTime? startedTo = null)
+        public async Task<ActionResult<PartsProcessDataDTO>> GetPartsProcessData([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10, [FromQuery] DateTime? startedFrom = null, [FromQuery] DateTime? startedTo = null, [FromQuery] bool orderDescBySerialNumber = true)
         {
             PartProcessDataServices partProcessDataServices = new PartProcessDataServices(_mapper);
-            return Ok(await partProcessDataServices.GetPartsProcessData(pageNumber, pageSize, startedFrom, startedTo));
+            return Ok(await partProcessDataServices.GetPartsProcessData(pageNumber, pageSize, startedFrom, startedTo, orderDescBySerialNumber));
         }
 
         [HttpGet("{partId}", Name = "GetPartProcessData")]
-        public async Task<ActionResult<PartAllProcessDataDTO>> GetPartProcessData([FromRoute] int partId)
+        public async Task<ActionResult<PartAllProcessDataDTO>> GetPartProcessData([FromRoute] string partId)
         {
             PartProcessDataServices partProcessDataServices = new PartProcessDataServices(_mapper);
             PartAllProcessDataDTO? partAllProcessData = await partProcessDataServices.GetPartProcessData(partId);

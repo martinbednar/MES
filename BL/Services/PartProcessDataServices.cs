@@ -17,7 +17,7 @@ namespace BL.Services
             _mapper = mapper;
         }
 
-        public async Task<List<PartAllProcessDataDTO>> GetPartsProcessData(int pageNumber, int pageSize, DateTime? startedFrom, DateTime? startedTo)
+        public async Task<PartsProcessDataDTO> GetPartsProcessData(int pageNumber, int pageSize, DateTime? startedFrom, DateTime? startedTo, bool orderDescBySerialNumber = true)
         {
             if (startedFrom == null)
             {
@@ -28,7 +28,7 @@ namespace BL.Services
                 startedTo = DateTime.MaxValue;
             }
 
-            List<PartAllProcessData> partsAllProcessData = await dbContext.PartAllProcessData
+            IQueryable<PartAllProcessData> partsAllProcessDataQueryable = dbContext.PartAllProcessData
                 .Include(p => p.AutoScrewingProcessData)
                 .Include(p => p.ConductivityProcessData)
                 .Include(p => p.FitAndFunctionProcessData)
@@ -57,16 +57,31 @@ namespace BL.Services
                     p.PressingProcessData.Any(pd => pd.DateTimeStarted <= startedTo) ||
                     p.PressingReworkProcessData.Any(pd => pd.DateTime >= startedFrom) ||
                     p.ScanProcessData.Any(pd => pd.DateTime <= startedTo)
-                )
+                );
+
+            if (orderDescBySerialNumber)
+            {
+                partsAllProcessDataQueryable = partsAllProcessDataQueryable.OrderByDescending(p => p.SerialNumber);
+            }
+            else
+            {
+                partsAllProcessDataQueryable = partsAllProcessDataQueryable.OrderBy(p => p.SerialNumber);
+            }
+
+            List<PartAllProcessData> partsAllProcessData = await partsAllProcessDataQueryable
                 .Skip((pageNumber - 1) * pageSize).Take(pageSize)
                 .ToListAsync();
 
-            return _mapper.Map<List<PartAllProcessDataDTO>>(partsAllProcessData);
+            return new PartsProcessDataDTO()
+            {
+                PartsCount = partsAllProcessDataQueryable.Count(),
+                PartsProcessData = _mapper.Map<List<PartAllProcessDataDTO>>(partsAllProcessData)
+            };
         }
 
-        public async Task<PartAllProcessDataDTO?> GetPartProcessData(int partId)
+        public async Task<PartAllProcessDataDTO?> GetPartProcessData(string partId)
         {
-            PartAllProcessData? partAllProcessData = await dbContext.PartAllProcessData
+            IQueryable<PartAllProcessData> partAllProcessDataQueryable = dbContext.PartAllProcessData
                 .Include(p => p.AutoScrewingProcessData)
                 .Include(p => p.ConductivityProcessData)
                 .Include(p => p.FitAndFunctionProcessData)
@@ -75,12 +90,37 @@ namespace BL.Services
                 .Include(p => p.NgAutoScrewingProcessData)
                 .Include(p => p.PressingProcessData)
                 .Include(p => p.PressingReworkProcessData)
-                .Include(p => p.ScanProcessData)
-                .FirstOrDefaultAsync(p => p.Id == partId);
+                .Include(p => p.ScanProcessData);
+
+
+            PartAllProcessData? partAllProcessData = await partAllProcessDataQueryable
+                .FirstOrDefaultAsync(p => p.Id.ToString() == partId);
 
             if (partAllProcessData == null)
             {
-                return null;
+                partAllProcessData = await partAllProcessDataQueryable
+                    .FirstOrDefaultAsync(p => p.SerialNumber == partId);
+
+                if (partAllProcessData == null)
+                {
+                    partAllProcessData = await partAllProcessDataQueryable
+                        .FirstOrDefaultAsync(p =>
+                            (p.ScanProcessData.LastOrDefault() != null) &&
+                            (p.ScanProcessData.OrderBy(s => s.Id).Last().PlantCode + p.ScanProcessData.OrderBy(s => s.Id).Last().FFF + p.ScanProcessData.OrderBy(s => s.Id).Last().SerialNumberProduct == partId));
+
+                    if (partAllProcessData == null)
+                    {
+                        return null;
+                    }
+                    else
+                    {
+                        return _mapper.Map<PartAllProcessDataDTO>(partAllProcessData);
+                    }
+                }
+                else
+                {
+                    return _mapper.Map<PartAllProcessDataDTO>(partAllProcessData);
+                }
             }
             else
             {
